@@ -14,5 +14,53 @@ public class MyAPI extends Reliqua {
     }
 }
 ```
+To use it:
+```java
+MyAPI api = new MyAPI();
+
+//async
+api.getThing().async(thing->System.out.println("got thing: " + thing), error->System.err.println("got error: " + error));
+
+//blocking
+Thing thing = api.getThing().execute();
+System.out.println("got thing: " + thing);
+
+//futures
+Future<Thing> futureThing = api.getThing().submit();
+```
+
+PendingRequest objects may be reused:
+```java
+PendingRequest<Thing> r = api.getThing();
+
+r.async(thing->System.out.println("got thing: " + thing), error->System.err.println("got error: " + error));
+
+Thing thing = r.execute();
+System.out.println("got thing: " + thing);
+
+//futures
+Future<Thing> futureThing = r.submit();
+```
+
+## Rate Limiting
+
+Reliqua includes a built in rate limiting API. Currently, only an implementation for API-wide rate limits is supplied.
+
+```java
+public class MyAPI extends Reliqua {
+    public MyAPI() {
+        super(
+            new GlobalRateLimiter(
+                Executors.newSingleThreadedScheduledExecutor(), //schedules request execution and rate limit resets
+                null, //we don't need to be notified
+                10, //10 requests until blocking
+                60_000 //60 second reset time
+            ),
+            new OkHttpClient(), //handles HTTP requests
+            true //track call sites for async requests for accurate error reporting
+        );
+    }
+}
+```
 
 More information can be found on the javadocs
