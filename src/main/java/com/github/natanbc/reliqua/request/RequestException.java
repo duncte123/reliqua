@@ -7,21 +7,21 @@ import javax.annotation.Nullable;
 public class RequestException extends RuntimeException {
     private final StackTraceElement[] callSite;
 
-    protected RequestException(String message, StackTraceElement[] callSite) {
+    public RequestException(String message, StackTraceElement[] callSite) {
         super(message);
         this.callSite = callSite;
     }
 
-    protected RequestException(String message) {
+    public RequestException(String message) {
         this(message, null);
     }
 
-    protected RequestException(Throwable cause, StackTraceElement[] callSite) {
+    public RequestException(Throwable cause, StackTraceElement[] callSite) {
         super(cause);
         this.callSite = callSite;
     }
 
-    protected RequestException(Throwable cause) {
+    public RequestException(Throwable cause) {
         this(cause, null);
     }
 

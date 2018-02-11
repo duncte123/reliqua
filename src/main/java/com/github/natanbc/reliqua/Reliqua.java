@@ -2,6 +2,8 @@ package com.github.natanbc.reliqua;
 
 import com.github.natanbc.reliqua.limiter.RateLimiter;
 import com.github.natanbc.reliqua.request.PendingRequest;
+import com.github.natanbc.reliqua.request.RequestContext;
+import com.github.natanbc.reliqua.util.ErrorHandler;
 import com.github.natanbc.reliqua.util.RequestMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -101,6 +103,26 @@ public abstract class Reliqua {
 
     @Nonnull
     @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper, @Nonnull ErrorHandler<T> errorHandler) {
+        Objects.requireNonNull(route, "Route may not be null");
+        Objects.requireNonNull(request, "Request may not be null");
+        Objects.requireNonNull(mapper, "Mapper may not be null");
+        return new PendingRequest<T>(this, request, route, expectedStatusCode) {
+            @Nullable
+            @Override
+            protected T mapData(@Nullable ResponseBody response) throws IOException {
+                return mapper.apply(response);
+            }
+
+            @Override
+            protected void onError(@Nonnull RequestContext<T> context) throws IOException {
+                errorHandler.apply(context);
+            }
+        };
+    }
+
+    @Nonnull
+    @CheckReturnValue
     protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper) {
         Objects.requireNonNull(route, "Route may not be null");
         Objects.requireNonNull(request, "Request may not be null");
@@ -119,6 +141,12 @@ public abstract class Reliqua {
     @CheckReturnValue
     protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnull RequestMapper<T> mapper) {
         return createRequest(route, request, 200, mapper);
+    }
+
+    @Nonnull
+    @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper, @Nonnull ErrorHandler<T> errorHandler) {
+        return createRequest(route, requestBuilder.build(), expectedStatusCode, mapper, errorHandler);
     }
 
     @Nonnull

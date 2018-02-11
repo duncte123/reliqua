@@ -66,6 +66,15 @@ public abstract class PendingRequest<T> {
     @Nullable
     protected abstract T mapData(@Nullable ResponseBody response) throws IOException;
 
+    protected void onError(@Nonnull RequestContext<T> context) throws IOException {
+        Response response = context.getResponse();
+        ResponseBody body = response.body();
+
+        String s = "Server returned unexpected status code " + response.code() + (body == null ? "" : " Body: " + body.string());
+        response.close();
+        context.getErrorConsumer().accept(new RequestException(s, context.getCallStack()));
+    }
+
     /**
      * Execute this request asynchronously. Cancelling the returned future has no effect.
      *
@@ -121,15 +130,26 @@ public abstract class PendingRequest<T> {
                     try {
                         ResponseBody body = response.body();
                         if(response.code() != expectedStatusCode) {
-                            String s = "Server returned unexpected status code " + response.code() + (body == null ? "" : " Body: " + body.string());
-                            response.close();
-                            finalOnError.accept(new RequestException(s, callSite));
+                            try {
+                                onError(new RequestContext<>(
+                                        callSite,
+                                        finalOnSuccess,
+                                        finalOnError,
+                                        response
+                                ));
+                            } finally {
+                                if(body != null) {
+                                    body.close();
+                                }
+                            }
                             return;
                         }
                         try {
                             finalOnSuccess.accept(mapData(body));
                         } finally {
-                            response.close();
+                            if(body != null) {
+                                body.close();
+                            }
                         }
                     } catch(RequestException e) {
                         finalOnError.accept(e);
