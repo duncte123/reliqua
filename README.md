@@ -8,7 +8,7 @@ A lightweight framework to build REST API wrappers in Java, with built in rate l
 ```java
 public class MyAPI extends Reliqua {
     public PendingRequest<Thing> getThing() {
-        return createRequest("/thing", new Request.Builder().url("https://some.site/thing"), body->{
+        return createRequest("/thing", new Request.Builder().url("https://some.site/thing"), 200 /* expected HTTP code */, body->{
             return new Thing(body.string());
         });
     }
