@@ -1,5 +1,7 @@
 package com.github.natanbc.reliqua.limiter;
 
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -27,21 +29,24 @@ public abstract class RateLimiter {
      *
      * @param task Task to be executed.
      */
-    public abstract void queue(@Nonnull String route, @Nonnull Runnable task);
+    public abstract void queue(@Nullable String route, @Nonnull Runnable task);
 
     /**
      * Get how many requests may still be done before the rate limit is hit and no more requests can be made.
      *
      * @return Remaining requests.
      */
-    public abstract int getRemainingRequests(@Nonnull String route);
+    @Nonnegative
+    @CheckReturnValue
+    public abstract int getRemainingRequests(@Nullable String route);
 
     /**
      * Get how much time, in milliseconds, is left until the rate limit is reset.
      *
      * @return Remaining cooldown time.
      */
-    public abstract long getTimeUntilReset(@Nonnull String route);
+    @CheckReturnValue
+    public abstract long getTimeUntilReset(@Nullable String route);
 
     /**
      * Creates a new rate limiter that does no handling of rate limits, useful for situations where few requests are made.
@@ -50,20 +55,22 @@ public abstract class RateLimiter {
      *
      * @return A direct rate limiter.
      */
+    @Nonnull
+    @CheckReturnValue
     public static RateLimiter directLimiter() {
         return new RateLimiter() {
             @Override
-            public void queue(@Nonnull String route, @Nonnull Runnable task) {
+            public void queue(@Nullable String route, @Nonnull Runnable task) {
                 task.run();
             }
 
             @Override
-            public int getRemainingRequests(@Nonnull String route) {
+            public int getRemainingRequests(@Nullable String route) {
                 return Integer.MAX_VALUE;
             }
 
             @Override
-            public long getTimeUntilReset(@Nonnull String route) {
+            public long getTimeUntilReset(@Nullable String route) {
                 return 0;
             }
         };

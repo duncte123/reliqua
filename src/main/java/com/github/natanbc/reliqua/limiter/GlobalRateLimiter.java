@@ -1,6 +1,7 @@
 package com.github.natanbc.reliqua.limiter;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Future;
@@ -39,18 +40,18 @@ public class GlobalRateLimiter extends RateLimiter {
     }
 
     @Override
-    public void queue(@Nonnull String route, @Nonnull Runnable task) {
+    public void queue(@Nullable String route, @Nonnull Runnable task) {
         pendingRequests.offer(task);
         executor.execute(this::process);
     }
 
     @Override
-    public int getRemainingRequests(@Nonnull String route) {
+    public int getRemainingRequests(@Nullable String route) {
         return maxRequests - requestsDone.get();
     }
 
     @Override
-    public long getTimeUntilReset(@Nonnull String route) {
+    public long getTimeUntilReset(@Nullable String route) {
         return TimeUnit.NANOSECONDS.toMillis(ratelimitResetTime.get() - System.nanoTime());
     }
 

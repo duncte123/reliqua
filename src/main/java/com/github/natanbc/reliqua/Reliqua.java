@@ -8,6 +8,7 @@ import okhttp3.Request;
 import okhttp3.ResponseBody;
 
 import javax.annotation.CheckReturnValue;
+import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -98,21 +99,39 @@ public abstract class Reliqua {
         return rateLimiter;
     }
 
-    protected <T> PendingRequest<T> createRequest(String route, Request request, RequestMapper<T> mapper) {
+    @Nonnull
+    @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper) {
         Objects.requireNonNull(route, "Route may not be null");
         Objects.requireNonNull(request, "Request may not be null");
         Objects.requireNonNull(mapper, "Mapper may not be null");
-        return new PendingRequest<T>(this, request, route) {
+        return new PendingRequest<T>(this, request, route, expectedStatusCode) {
             @Nullable
             @Override
-            protected T mapData(@Nonnull ResponseBody response) throws IOException {
+            protected T mapData(@Nullable ResponseBody response) throws IOException {
                 return mapper.apply(response);
             }
         };
     }
 
-    protected <T> PendingRequest<T> createRequest(String route, Request.Builder requestBuilder, RequestMapper<T> mapper) {
+    @Deprecated
+    @Nonnull
+    @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnull RequestMapper<T> mapper) {
+        return createRequest(route, request, 200, mapper);
+    }
+
+    @Nonnull
+    @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper) {
         Objects.requireNonNull(requestBuilder, "Request builder may not be null");
-        return createRequest(route, requestBuilder.build(), mapper);
+        return createRequest(route, requestBuilder.build(), expectedStatusCode, mapper);
+    }
+
+    @Deprecated
+    @Nonnull
+    @CheckReturnValue
+    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnull RequestMapper<T> mapper) {
+        return createRequest(route, requestBuilder, 200, mapper);
     }
 }

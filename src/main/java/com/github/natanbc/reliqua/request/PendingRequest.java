@@ -7,6 +7,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -34,23 +35,36 @@ public abstract class PendingRequest<T> {
     private final Reliqua api;
     private final Request httpRequest;
     private final String route;
+    private final int expectedStatusCode;
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nonnull String route) {
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable String route, @Nonnegative int expectedStatusCode) {
         this.api = Objects.requireNonNull(api, "API may not be null");
         this.httpRequest = Objects.requireNonNull(httpRequest, "HTTP request may not be null");
         this.route = Objects.requireNonNull(route, "Route may not be null");
+        this.expectedStatusCode = expectedStatusCode;
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nonnull String route) {
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable String route) {
+        this(api, httpRequest, route, 200);
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable String route, @Nonnegative int expectedStatusCode) {
         this(
                 api,
                 Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
-                route
+                route,
+                expectedStatusCode
         );
     }
 
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable String route) {
+        this(api, httpRequestBuilder, route, 200);
+    }
+
     @Nullable
-    protected abstract T mapData(@Nonnull ResponseBody response) throws IOException;
+    protected abstract T mapData(@Nullable ResponseBody response) throws IOException;
 
     /**
      * Execute this request asynchronously. Cancelling the returned future has no effect.
@@ -106,14 +120,11 @@ public abstract class PendingRequest<T> {
                 public void onResponse(@Nonnull Call call, @Nonnull Response response) {
                     try {
                         ResponseBody body = response.body();
-                        if(response.code() != 200) {
+                        if(response.code() != expectedStatusCode) {
                             String s = "Server returned unexpected status code " + response.code() + (body == null ? "" : " Body: " + body.string());
                             response.close();
                             finalOnError.accept(new RequestException(s, callSite));
                             return;
-                        }
-                        if(body == null) {
-                            throw new AssertionError("body is null(???)");
                         }
                         try {
                             finalOnSuccess.accept(mapData(body));
