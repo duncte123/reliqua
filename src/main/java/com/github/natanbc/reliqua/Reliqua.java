@@ -1,20 +1,25 @@
 package com.github.natanbc.reliqua;
 
 import com.github.natanbc.reliqua.limiter.RateLimiter;
+import com.github.natanbc.reliqua.limiter.factory.RateLimiterFactory;
 import com.github.natanbc.reliqua.request.PendingRequest;
 import com.github.natanbc.reliqua.request.RequestContext;
 import com.github.natanbc.reliqua.util.ErrorHandler;
-import com.github.natanbc.reliqua.util.RequestMapper;
+import com.github.natanbc.reliqua.util.PendingRequestBuilder;
+import com.github.natanbc.reliqua.util.ResponseMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.ResponseBody;
+import okhttp3.Response;
 
 import javax.annotation.CheckReturnValue;
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.IntPredicate;
 
 /**
  * Used to create REST API wrappers, providing a rate limiter and easy way to have both synchronous and asynchronous
@@ -22,25 +27,26 @@ import java.util.Objects;
  */
 @SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class Reliqua {
-    private final RateLimiter rateLimiter;
+    private final Map<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
+    private final RateLimiterFactory rateLimiterFactory;
     private final OkHttpClient client;
     private boolean trackCallSites;
 
     /**
      * Creates a new reliqua instance.
      *
-     * @param rateLimiter RateLimiter used to throttle requests. Defaults to a direct (unthrottled) implementation if null.
      * @param client The OkHttpClient used to make HTTP requests. May not be null.
+     * @param rateLimiterFactory Factory used to create rate limiters. May be null.
      * @param trackCallSites Whether or not call sites should be tracked for async requests.
      */
-    protected Reliqua(RateLimiter rateLimiter, OkHttpClient client, boolean trackCallSites) {
-        if(rateLimiter == null) {
-            rateLimiter = RateLimiter.directLimiter();
-        }
+    protected Reliqua(OkHttpClient client, RateLimiterFactory rateLimiterFactory, boolean trackCallSites) {
         if(client == null) {
             throw new IllegalArgumentException("Client is null");
         }
-        this.rateLimiter = rateLimiter;
+        if(rateLimiterFactory == null) {
+            rateLimiterFactory = RateLimiterFactory.directFactory();
+        }
+        this.rateLimiterFactory = rateLimiterFactory;
         this.client = client;
         this.trackCallSites = trackCallSites;
     }
@@ -51,14 +57,14 @@ public abstract class Reliqua {
      * @param client The OkHttpClient used to make HTTP requests. May not be null.
      */
     protected Reliqua(OkHttpClient client) {
-        this(null, client, false);
+        this(client, null, false);
     }
 
     /**
      * Creates a new reliqua with no rate limiter and with call site tracking disabled.
      */
     protected Reliqua() {
-        this(null, new OkHttpClient(), false);
+        this(new OkHttpClient());
     }
 
     /**
@@ -92,74 +98,20 @@ public abstract class Reliqua {
     }
 
     /**
-     * Returns this instance's RateLimiter, used to throttle requests.
+     * Returns the rate limiter used to throttle requests to the given identifier, creating one if needed.
      *
-     * @return This instance's RateLimiter.
+     * @return The rate limiter for the given key.
      */
     @CheckReturnValue
-    public RateLimiter getRateLimiter() {
-        return rateLimiter;
+    public RateLimiter getRateLimiter(String key) {
+        return rateLimiterFactory.getRateLimiter(key);
     }
 
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper, @Nonnull ErrorHandler<T> errorHandler) {
-        Objects.requireNonNull(route, "Route may not be null");
-        Objects.requireNonNull(request, "Request may not be null");
-        Objects.requireNonNull(mapper, "Mapper may not be null");
-        return new PendingRequest<T>(this, request, route, expectedStatusCode) {
-            @Nullable
-            @Override
-            protected T mapData(@Nullable ResponseBody response) throws IOException {
-                return mapper.apply(response);
-            }
-
-            @Override
-            protected void onError(@Nonnull RequestContext<T> context) throws IOException {
-                errorHandler.apply(context);
-            }
-        };
+    protected PendingRequestBuilder createRequest(Request request) {
+        return new PendingRequestBuilder(this, request);
     }
 
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper) {
-        Objects.requireNonNull(route, "Route may not be null");
-        Objects.requireNonNull(request, "Request may not be null");
-        Objects.requireNonNull(mapper, "Mapper may not be null");
-        return new PendingRequest<T>(this, request, route, expectedStatusCode) {
-            @Nullable
-            @Override
-            protected T mapData(@Nullable ResponseBody response) throws IOException {
-                return mapper.apply(response);
-            }
-        };
-    }
-
-    @Deprecated
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request request, @Nonnull RequestMapper<T> mapper) {
-        return createRequest(route, request, 200, mapper);
-    }
-
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper, @Nonnull ErrorHandler<T> errorHandler) {
-        return createRequest(route, requestBuilder.build(), expectedStatusCode, mapper, errorHandler);
-    }
-
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnegative int expectedStatusCode, @Nonnull RequestMapper<T> mapper) {
-        Objects.requireNonNull(requestBuilder, "Request builder may not be null");
-        return createRequest(route, requestBuilder.build(), expectedStatusCode, mapper);
-    }
-
-    @Deprecated
-    @Nonnull
-    @CheckReturnValue
-    protected <T> PendingRequest<T> createRequest(@Nullable String route, @Nonnull Request.Builder requestBuilder, @Nonnull RequestMapper<T> mapper) {
-        return createRequest(route, requestBuilder, 200, mapper);
+    protected PendingRequestBuilder createRequest(Request.Builder builder) {
+        return createRequest(Objects.requireNonNull(builder, "Builder may not be null").build());
     }
 }

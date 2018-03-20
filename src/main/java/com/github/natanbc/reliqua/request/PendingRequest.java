@@ -1,13 +1,13 @@
 package com.github.natanbc.reliqua.request;
 
 import com.github.natanbc.reliqua.Reliqua;
+import com.github.natanbc.reliqua.limiter.RateLimiter;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.IntPredicate;
 
 /**
  * This class represents a request which has not yet been scheduled to execute.
@@ -34,37 +35,63 @@ import java.util.function.Consumer;
 public abstract class PendingRequest<T> {
     private final Reliqua api;
     private final Request httpRequest;
-    private final String route;
-    private final int expectedStatusCode;
+    private final IntPredicate statusCodeValidator;
+    private RateLimiter rateLimiter;
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable String route, @Nonnegative int expectedStatusCode) {
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
         this.api = Objects.requireNonNull(api, "API may not be null");
+        this.rateLimiter = rateLimiter;
         this.httpRequest = Objects.requireNonNull(httpRequest, "HTTP request may not be null");
-        this.route = Objects.requireNonNull(route, "Route may not be null");
-        this.expectedStatusCode = expectedStatusCode;
+        this.statusCodeValidator = statusCodeValidator == null ? ignored->true : statusCodeValidator;
     }
 
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable String route) {
-        this(api, httpRequest, route, 200);
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
+        this(api, null, httpRequest, statusCodeValidator);
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable String route, @Nonnegative int expectedStatusCode) {
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest) {
+        this(api, rateLimiter, httpRequest, null);
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest) {
+        this(api, httpRequest, null);
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
         this(
                 api,
+                rateLimiter,
                 Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
-                route,
-                expectedStatusCode
+                statusCodeValidator
         );
     }
 
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable String route) {
-        this(api, httpRequestBuilder, route, 200);
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
+        this(
+                api,
+                Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
+                statusCodeValidator
+        );
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder) {
+        this(api, rateLimiter, httpRequestBuilder, null);
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder) {
+        this(api, httpRequestBuilder, null);
+    }
+
+    public Reliqua getApi() {
+        return api;
+    }
+
+    public Request getHttpRequest() {
+        return httpRequest;
     }
 
     @Nullable
-    protected abstract T mapData(@Nullable ResponseBody response) throws IOException;
+    protected abstract T onSuccess(@Nonnull Response response) throws IOException;
 
     protected void onError(@Nonnull RequestContext<T> context) throws IOException {
         Response response = context.getResponse();
@@ -92,7 +119,6 @@ public abstract class PendingRequest<T> {
      *
      * @return The response received from the API.
      */
-    @Nullable
     public T execute() {
         try {
             return submit().get();
@@ -118,7 +144,7 @@ public abstract class PendingRequest<T> {
         Consumer<T> finalOnSuccess = onSuccess;
         Consumer<RequestException> finalOnError = onError;
 
-        api.getRateLimiter().queue(route, ()->{
+        Runnable r = ()->
             api.getClient().newCall(httpRequest).enqueue(new Callback() {
                 @Override
                 public void onFailure(@Nonnull Call call, @Nonnull IOException e) {
@@ -129,7 +155,7 @@ public abstract class PendingRequest<T> {
                 public void onResponse(@Nonnull Call call, @Nonnull Response response) {
                     try {
                         ResponseBody body = response.body();
-                        if(response.code() != expectedStatusCode) {
+                        if(!statusCodeValidator.test(response.code())) {
                             try {
                                 onError(new RequestContext<>(
                                         callSite,
@@ -145,7 +171,7 @@ public abstract class PendingRequest<T> {
                             return;
                         }
                         try {
-                            finalOnSuccess.accept(mapData(body));
+                            finalOnSuccess.accept(onSuccess(response));
                         } finally {
                             if(body != null) {
                                 body.close();
@@ -157,8 +183,14 @@ public abstract class PendingRequest<T> {
                         finalOnError.accept(new RequestException(e, callSite));
                     }
                 }
-            });
-        });
+            }
+        );
+
+        if(rateLimiter == null) {
+            r.run();
+        } else {
+            rateLimiter.queue(r);
+        }
     }
 
     /**

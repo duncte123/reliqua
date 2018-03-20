@@ -1,12 +1,12 @@
 package com.github.natanbc.reliqua.util;
 
-import okhttp3.ResponseBody;
+import okhttp3.Response;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
 
 @FunctionalInterface
-public interface RequestMapper<T> {
+public interface ResponseMapper<T> {
     @Nullable
-    T apply(@Nullable ResponseBody body) throws IOException;
+    T apply(@Nullable Response body) throws IOException;
 }

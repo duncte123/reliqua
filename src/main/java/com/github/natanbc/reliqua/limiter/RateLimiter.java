@@ -3,7 +3,6 @@ package com.github.natanbc.reliqua.limiter;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 @SuppressWarnings("unused")
 public abstract class RateLimiter {
@@ -16,12 +15,12 @@ public abstract class RateLimiter {
         /**
          * Called when an attempted request is rate limited. Might be called more than once per request
          */
-        void requestRateLimited(@Nullable String route);
+        void requestRateLimited();
 
         /**
          * Called when the rate limit is reset.
          */
-        void rateLimitReset(@Nullable String route);
+        void rateLimitReset();
     }
 
     /**
@@ -29,7 +28,7 @@ public abstract class RateLimiter {
      *
      * @param task Task to be executed.
      */
-    public abstract void queue(@Nullable String route, @Nonnull Runnable task);
+    public abstract void queue(@Nonnull Runnable task);
 
     /**
      * Get how many requests may still be done before the rate limit is hit and no more requests can be made.
@@ -38,7 +37,7 @@ public abstract class RateLimiter {
      */
     @Nonnegative
     @CheckReturnValue
-    public abstract int getRemainingRequests(@Nullable String route);
+    public abstract int getRemainingRequests();
 
     /**
      * Get how much time, in milliseconds, is left until the rate limit is reset.
@@ -46,7 +45,7 @@ public abstract class RateLimiter {
      * @return Remaining cooldown time.
      */
     @CheckReturnValue
-    public abstract long getTimeUntilReset(@Nullable String route);
+    public abstract long getTimeUntilReset();
 
     /**
      * Creates a new rate limiter that does no handling of rate limits, useful for situations where few requests are made.
@@ -58,21 +57,27 @@ public abstract class RateLimiter {
     @Nonnull
     @CheckReturnValue
     public static RateLimiter directLimiter() {
-        return new RateLimiter() {
-            @Override
-            public void queue(@Nullable String route, @Nonnull Runnable task) {
-                task.run();
-            }
+        return DirectLimiter.INSTANCE;
+    }
 
-            @Override
-            public int getRemainingRequests(@Nullable String route) {
-                return Integer.MAX_VALUE;
-            }
+    private static class DirectLimiter extends RateLimiter {
+        static final DirectLimiter INSTANCE = new DirectLimiter();
 
-            @Override
-            public long getTimeUntilReset(@Nullable String route) {
-                return 0;
-            }
-        };
+        private DirectLimiter() {}
+
+        @Override
+        public void queue(@Nonnull Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public int getRemainingRequests() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public long getTimeUntilReset() {
+            return 0;
+        }
     }
 }

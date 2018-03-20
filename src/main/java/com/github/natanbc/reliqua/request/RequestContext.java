@@ -12,14 +12,14 @@ import java.util.function.Consumer;
  *
  * @param <T> The type the request is supposed to return.
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "WeakerAccess"})
 public class RequestContext<T> {
     private final StackTraceElement[] callStack;
     private final Consumer<T> successConsumer;
     private final Consumer<RequestException> errorConsumer;
     private final Response response;
 
-    RequestContext(StackTraceElement[] callStack, Consumer<T> successConsumer, Consumer<RequestException> errorConsumer, Response response) {
+    public RequestContext(StackTraceElement[] callStack, Consumer<T> successConsumer, Consumer<RequestException> errorConsumer, Response response) {
         this.callStack = callStack;
         this.successConsumer = successConsumer;
         this.errorConsumer = errorConsumer;

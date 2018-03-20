@@ -1,7 +1,6 @@
 package com.github.natanbc.reliqua.limiter;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Future;
@@ -10,11 +9,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Rate limiter that applies to all routes, global to the whole REST API.
- */
 @SuppressWarnings({"unused", "WeakerAccess"})
-public class GlobalRateLimiter extends RateLimiter {
+public class DefaultRateLimiter extends RateLimiter {
     protected final Queue<Runnable> pendingRequests = new ConcurrentLinkedQueue<>();
     protected final AtomicInteger requestsDone = new AtomicInteger(0);
     protected final AtomicLong ratelimitResetTime = new AtomicLong();
@@ -25,14 +21,14 @@ public class GlobalRateLimiter extends RateLimiter {
     protected Future<?> ratelimitTimeResetFuture;
 
     /**
-     * Creates a new global rate limiter.
+     * Creates a new rate limiter.
      *
      * @param executor The executor to schedule cooldowns and rate limit processing.
      * @param callback Callback to be notified about rate limiter actions.
      * @param maxRequests Maximum amount of requests that may be done before being rate limited.
      * @param cooldownMillis Time to reset the requests done, starting from the first request done since the last reset.
      */
-    public GlobalRateLimiter(ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
+    public DefaultRateLimiter(ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
         this.executor = executor;
         this.callback = callback;
         this.maxRequests = maxRequests;
@@ -40,18 +36,18 @@ public class GlobalRateLimiter extends RateLimiter {
     }
 
     @Override
-    public void queue(@Nullable String route, @Nonnull Runnable task) {
+    public void queue(@Nonnull Runnable task) {
         pendingRequests.offer(task);
         executor.execute(this::process);
     }
 
     @Override
-    public int getRemainingRequests(@Nullable String route) {
+    public int getRemainingRequests() {
         return maxRequests - requestsDone.get();
     }
 
     @Override
-    public long getTimeUntilReset(@Nullable String route) {
+    public long getTimeUntilReset() {
         return TimeUnit.NANOSECONDS.toMillis(ratelimitResetTime.get() - System.nanoTime());
     }
 
@@ -62,7 +58,7 @@ public class GlobalRateLimiter extends RateLimiter {
             executor.schedule(this::process, ratelimitResetTime.get() - System.nanoTime(), TimeUnit.NANOSECONDS);
             if(callback != null) {
                 try {
-                    callback.requestRateLimited(null);
+                    callback.requestRateLimited();
                 } catch(Exception ignored) {}
             }
             return;
@@ -73,7 +69,7 @@ public class GlobalRateLimiter extends RateLimiter {
                     executor.schedule(this::process, ratelimitResetTime.get() - System.nanoTime(), TimeUnit.NANOSECONDS);
                     if(callback != null) {
                         try {
-                            callback.requestRateLimited(null);
+                            callback.requestRateLimited();
                         } catch(Exception ignored) {}
                     }
                     return;
@@ -84,7 +80,7 @@ public class GlobalRateLimiter extends RateLimiter {
                     ratelimitTimeResetFuture = null;
                     if(callback != null) {
                         try {
-                            callback.rateLimitReset(null);
+                            callback.rateLimitReset();
                         } catch(Exception ignored) {}
                     }
                 }, cooldownMillis, TimeUnit.MILLISECONDS);
