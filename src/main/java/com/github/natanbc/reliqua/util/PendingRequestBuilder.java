@@ -14,11 +14,12 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.function.IntPredicate;
 
+@SuppressWarnings({"unused", "WeakerAccess"})
 public class PendingRequestBuilder {
     private final Reliqua api;
     private final Request request;
     private RateLimiter rateLimiter;
-    private IntPredicate statusCodeValidator;
+    private StatusCodeValidator statusCodeValidator;
 
     public PendingRequestBuilder(@Nonnull Reliqua api, @Nonnull Request request) {
         this.api = Objects.requireNonNull(api, "API may not be null");
@@ -34,9 +35,15 @@ public class PendingRequestBuilder {
 
     @Nonnull
     @CheckReturnValue
-    public PendingRequestBuilder setStatusCodeValidator(@Nullable IntPredicate statusCodeValidator) {
+    public PendingRequestBuilder setStatusCodeValidator(@Nullable StatusCodeValidator statusCodeValidator) {
         this.statusCodeValidator = statusCodeValidator;
         return this;
+    }
+
+    @Nonnull
+    @CheckReturnValue
+    public PendingRequestBuilder setStatusCodeValidator(@Nullable IntPredicate predicate) {
+        return setStatusCodeValidator(StatusCodeValidator.wrap(predicate));
     }
 
     @Nonnull

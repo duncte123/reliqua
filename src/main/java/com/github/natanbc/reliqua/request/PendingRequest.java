@@ -2,6 +2,7 @@ package com.github.natanbc.reliqua.request;
 
 import com.github.natanbc.reliqua.Reliqua;
 import com.github.natanbc.reliqua.limiter.RateLimiter;
+import com.github.natanbc.reliqua.util.StatusCodeValidator;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Request;
@@ -35,18 +36,28 @@ import java.util.function.IntPredicate;
 public abstract class PendingRequest<T> {
     private final Reliqua api;
     private final Request httpRequest;
-    private final IntPredicate statusCodeValidator;
+    private final StatusCodeValidator statusCodeValidator;
     private RateLimiter rateLimiter;
 
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
         this.api = Objects.requireNonNull(api, "API may not be null");
         this.rateLimiter = rateLimiter;
         this.httpRequest = Objects.requireNonNull(httpRequest, "HTTP request may not be null");
         this.statusCodeValidator = statusCodeValidator == null ? ignored->true : statusCodeValidator;
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
+        this(api, rateLimiter, httpRequest, StatusCodeValidator.wrap(statusCodeValidator));
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
         this(api, null, httpRequest, statusCodeValidator);
+    }
+
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
+        this(api, httpRequest, StatusCodeValidator.wrap(statusCodeValidator));
     }
 
     public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest) {
@@ -57,7 +68,7 @@ public abstract class PendingRequest<T> {
         this(api, httpRequest, null);
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
         this(
                 api,
                 rateLimiter,
@@ -66,12 +77,22 @@ public abstract class PendingRequest<T> {
         );
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
+        this(api, rateLimiter, httpRequestBuilder, StatusCodeValidator.wrap(statusCodeValidator));
+    }
+
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
         this(
                 api,
                 Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
                 statusCodeValidator
         );
+    }
+
+    @Deprecated
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
+        this(api, httpRequestBuilder, StatusCodeValidator.wrap(statusCodeValidator));
     }
 
     public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder) {

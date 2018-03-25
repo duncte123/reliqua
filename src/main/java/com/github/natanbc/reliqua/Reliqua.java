@@ -100,6 +100,8 @@ public abstract class Reliqua {
     /**
      * Returns the rate limiter used to throttle requests to the given identifier, creating one if needed.
      *
+     * @param key Key identifying the rate limiter.
+     *
      * @return The rate limiter for the given key.
      */
     @CheckReturnValue
