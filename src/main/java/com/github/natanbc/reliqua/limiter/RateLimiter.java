@@ -48,6 +48,20 @@ public abstract class RateLimiter {
     public abstract long getTimeUntilReset();
 
     /**
+     * Creates a child rate limiter, whose requests increase this limiter's counter, but have a separate cooldown.
+     *
+     * @param requests Requests that can be done before needing a cooldown.
+     * @param cooldown Cooldown time, in milliseconds.
+     *
+     * @return A new child rate limiter.
+     */
+    @CheckReturnValue
+    @Nonnull
+    public RateLimiter createChildLimiter(int requests, long cooldown) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * Creates a new rate limiter that does no handling of rate limits, useful for situations where few requests are made.
      *
      * <br>When using this method, you are responsible for handling rate limits.
@@ -78,6 +92,12 @@ public abstract class RateLimiter {
         @Override
         public long getTimeUntilReset() {
             return 0;
+        }
+
+        @Nonnull
+        @Override
+        public RateLimiter createChildLimiter(int requests, long cooldown) {
+            return this;
         }
     }
 }

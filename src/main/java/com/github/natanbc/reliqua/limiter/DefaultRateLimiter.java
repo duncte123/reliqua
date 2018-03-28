@@ -14,11 +14,20 @@ public class DefaultRateLimiter extends RateLimiter {
     protected final Queue<Runnable> pendingRequests = new ConcurrentLinkedQueue<>();
     protected final AtomicInteger requestsDone = new AtomicInteger(0);
     protected final AtomicLong ratelimitResetTime = new AtomicLong();
+    protected final DefaultRateLimiter parent;
     protected final ScheduledExecutorService executor;
     protected final Callback callback;
     protected final int maxRequests;
     protected final long cooldownMillis;
     protected Future<?> ratelimitTimeResetFuture;
+
+    private DefaultRateLimiter(DefaultRateLimiter parent, ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
+        this.parent = parent;
+        this.executor = executor;
+        this.callback = callback;
+        this.maxRequests = maxRequests;
+        this.cooldownMillis = cooldownMillis;
+    }
 
     /**
      * Creates a new rate limiter.
@@ -29,10 +38,7 @@ public class DefaultRateLimiter extends RateLimiter {
      * @param cooldownMillis Time to reset the requests done, starting from the first request done since the last reset.
      */
     public DefaultRateLimiter(ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
-        this.executor = executor;
-        this.callback = callback;
-        this.maxRequests = maxRequests;
-        this.cooldownMillis = cooldownMillis;
+        this(null, executor, callback, maxRequests, cooldownMillis);
     }
 
     @Override
@@ -48,14 +54,32 @@ public class DefaultRateLimiter extends RateLimiter {
 
     @Override
     public long getTimeUntilReset() {
-        return TimeUnit.NANOSECONDS.toMillis(ratelimitResetTime.get() - System.nanoTime());
+        return TimeUnit.NANOSECONDS.toMillis(rateLimitResetNanos());
     }
 
-    private void process() {
+    @Nonnull
+    @Override
+    public RateLimiter createChildLimiter(int requests, long cooldown) {
+        return super.createChildLimiter(requests, cooldown);
+    }
+
+    protected boolean isOverQuota() {
+        return (parent != null && parent.isOverQuota()) || requestsDone.get() >= maxRequests;
+    }
+
+    protected boolean canExecuteRequest() {
+        return (parent == null || parent.canExecuteRequest()) && requestsDone.incrementAndGet() < maxRequests;
+    }
+
+    protected long rateLimitResetNanos() {
+        return Math.min(ratelimitResetTime.get() - System.nanoTime(), parent == null ? Long.MAX_VALUE : parent.rateLimitResetNanos());
+    }
+
+    protected void process() {
         Runnable r = pendingRequests.peek();
         if(r == null) return;
-        if(requestsDone.get() >= maxRequests) {
-            executor.schedule(this::process, ratelimitResetTime.get() - System.nanoTime(), TimeUnit.NANOSECONDS);
+        if(isOverQuota()) {
+            executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
             if(callback != null) {
                 try {
                     callback.requestRateLimited();
@@ -63,10 +87,10 @@ public class DefaultRateLimiter extends RateLimiter {
             }
             return;
         }
-        if(requestsDone.incrementAndGet() >= maxRequests) {
+        if(!canExecuteRequest()) {
             synchronized(this) {
                 if(ratelimitTimeResetFuture != null) {
-                    executor.schedule(this::process, ratelimitResetTime.get() - System.nanoTime(), TimeUnit.NANOSECONDS);
+                    executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
                     if(callback != null) {
                         try {
                             callback.requestRateLimited();

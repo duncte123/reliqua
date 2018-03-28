@@ -111,6 +111,14 @@ public abstract class PendingRequest<T> {
         return httpRequest;
     }
 
+    public RateLimiter getRateLimiter() {
+        return rateLimiter;
+    }
+
+    public StatusCodeValidator getStatusCodeValidator() {
+        return statusCodeValidator;
+    }
+
     @Nullable
     protected abstract T onSuccess(@Nonnull Response response) throws IOException;
 
