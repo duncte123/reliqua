@@ -8,9 +8,10 @@ A lightweight framework to build REST API wrappers in Java, with built in rate l
 ```java
 public class MyAPI extends Reliqua {
     public PendingRequest<Thing> getThing() {
-        return createRequest("/thing", new Request.Builder().url("https://some.site/thing"), 200 /* expected HTTP code */, body->{
-            return new Thing(body.string());
-        });
+        return createRequest(new Request.Builder().url("https://some.site/thing"))
+            .setStatusCodeValidator(StatusCodeValidator.ACCEPT_200)
+            .setRateLimiter(getRateLimiter("/thing"))
+            .build(response->new Thing(getDataFromResponse(response)), context->handleError(context));
     }
 }
 ```
@@ -38,29 +39,12 @@ r.async(thing->System.out.println("got thing: " + thing), error->System.err.prin
 Thing thing = r.execute();
 System.out.println("got thing: " + thing);
 
-//futures
 Future<Thing> futureThing = r.submit();
 ```
 
 ## Rate Limiting
 
-Reliqua includes a built in rate limiting API. Currently, only an implementation for API-wide rate limits is supplied.
+Reliqua includes a built in rate limiting API. Check the RateLimiterFactory class for more details.
 
-```java
-public class MyAPI extends Reliqua {
-    public MyAPI() {
-        super(
-            new GlobalRateLimiter(
-                Executors.newSingleThreadedScheduledExecutor(), //schedules request execution and rate limit resets
-                null, //we don't need to be notified
-                10, //10 requests until blocking
-                60_000 //60 second reset time
-            ),
-            new OkHttpClient(), //handles HTTP requests
-            true //track call sites for async requests for accurate error reporting
-        );
-    }
-}
-```
 
 More information can be found on the javadocs
