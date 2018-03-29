@@ -52,13 +52,28 @@ public abstract class RateLimiter {
      *
      * @param requests Requests that can be done before needing a cooldown.
      * @param cooldown Cooldown time, in milliseconds.
+     * @param callback Callback to be notified about rate limits.
+     *
+     * @return A new child rate limiter.
+     */
+    @CheckReturnValue
+    @Nonnull
+    public RateLimiter createChildLimiter(int requests, long cooldown, Callback callback) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Creates a child rate limiter, whose requests increase this limiter's counter, but have a separate cooldown.
+     *
+     * @param requests Requests that can be done before needing a cooldown.
+     * @param cooldown Cooldown time, in milliseconds.
      *
      * @return A new child rate limiter.
      */
     @CheckReturnValue
     @Nonnull
     public RateLimiter createChildLimiter(int requests, long cooldown) {
-        throw new UnsupportedOperationException();
+        return createChildLimiter(requests, cooldown, null);
     }
 
     /**

@@ -1,8 +1,8 @@
 package com.github.natanbc.reliqua.limiter;
 
 import javax.annotation.Nonnull;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Deque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class DefaultRateLimiter extends RateLimiter {
-    protected final Queue<Runnable> pendingRequests = new ConcurrentLinkedQueue<>();
+    protected final Deque<Runnable> pendingRequests = new ConcurrentLinkedDeque<>();
     protected final AtomicInteger requestsDone = new AtomicInteger(0);
     protected final AtomicLong ratelimitResetTime = new AtomicLong();
     protected final DefaultRateLimiter parent;
@@ -59,8 +59,8 @@ public class DefaultRateLimiter extends RateLimiter {
 
     @Nonnull
     @Override
-    public RateLimiter createChildLimiter(int requests, long cooldown) {
-        return super.createChildLimiter(requests, cooldown);
+    public RateLimiter createChildLimiter(int requests, long cooldown, Callback callback) {
+        return new DefaultRateLimiter(this, executor, callback, requests, cooldown);
     }
 
     protected boolean isOverQuota() {
@@ -68,7 +68,7 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     protected boolean canExecuteRequest() {
-        return (parent == null || parent.canExecuteRequest()) && requestsDone.incrementAndGet() < maxRequests;
+        return (parent == null || parent.canExecuteRequest()) && requestsDone.incrementAndGet() <= maxRequests;
     }
 
     protected long rateLimitResetNanos() {
@@ -87,7 +87,12 @@ public class DefaultRateLimiter extends RateLimiter {
             }
             return;
         }
+        Runnable task = pendingRequests.poll();
+        if(task == null) {
+            return;
+        }
         if(!canExecuteRequest()) {
+            pendingRequests.addFirst(task);
             synchronized(this) {
                 if(ratelimitTimeResetFuture != null) {
                     executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
@@ -112,7 +117,7 @@ public class DefaultRateLimiter extends RateLimiter {
                 return;
             }
         }
-        pendingRequests.poll().run();
+        task.run();
         ratelimitResetTime.compareAndSet(0, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(cooldownMillis));
     }
 }
