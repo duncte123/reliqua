@@ -9,9 +9,13 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -236,5 +240,88 @@ public abstract class PendingRequest<T> {
      */
     public void async() {
         async(null, null);
+    }
+
+    /**
+     * Executes all of the given requests, and returns a list with their results. The returned future is guaranteed to execute successfully.
+     *
+     * @param requests Requests to execute.
+     * @param <T> Type returned by the requests.
+     *
+     * @return List of the results of the requests.
+     */
+    @CheckReturnValue
+    @Nonnull
+    @SafeVarargs
+    public static <T, R extends PendingRequest<T>> Future<List<Result<T>>> allOf(R... requests) {
+        int requestCount = requests.length;
+        CompletableFuture<List<Result<T>>> f = new CompletableFuture<>();
+        List<Result<T>> list = new ArrayList<>(requestCount);
+        if(requestCount == 0) {
+            f.complete(Collections.unmodifiableList(list));
+            return f;
+        }
+        for(R request : requests) {
+            int idx = list.size();
+            //fill list with nulls so we can use List#set(int, Object)
+            list.add(null);
+            CompletableFuture<T> f2 = new CompletableFuture<T>().whenComplete((result,error)->{
+                list.set(idx, new Result<>(result, error));
+                if(list.size() == requestCount) {
+                    f.complete(Collections.unmodifiableList(list));
+                }
+            });
+            request.async(f2::complete, f2::completeExceptionally);
+        }
+        return f;
+    }
+
+    /**
+     * Represents the result of an asynchronous request.
+     *
+     * @param <T> Type of the request.
+     */
+    public static class Result<T> {
+        private final T value;
+        private final Throwable exception;
+
+        private Result(T value, Throwable exception) {
+            this.value = value;
+            this.exception = exception;
+        }
+
+        /**
+         * Returns the value resulting from the request. Throws if there was an error in the request.
+         *
+         * @return The request result.
+         *
+         * @throws IllegalStateException If the request wasn't successful
+         */
+        @CheckReturnValue
+        public T getValue() {
+            if(exception != null) throw new IllegalStateException(exception);
+            return value;
+        }
+
+        /**
+         * Returns the exception that happened while executing the request. Returns null if the request was successful.
+         *
+         * @return The exception that happened, or null if the request was successful.
+         */
+        @CheckReturnValue
+        @Nullable
+        public Throwable getException() {
+            return exception;
+        }
+
+        /**
+         * Returns whether or not the request was successful.
+         *
+         * @return Whether or not the request was successful.
+         */
+        @CheckReturnValue
+        public boolean isSuccess() {
+            return exception == null;
+        }
     }
 }

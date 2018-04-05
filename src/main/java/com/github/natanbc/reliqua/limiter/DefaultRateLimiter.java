@@ -72,7 +72,7 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     protected long rateLimitResetNanos() {
-        return Math.min(ratelimitResetTime.get() - System.nanoTime(), parent == null ? Long.MAX_VALUE : parent.rateLimitResetNanos());
+        return Math.max(ratelimitResetTime.get() - System.nanoTime(), parent == null ? 0 : parent.rateLimitResetNanos());
     }
 
     protected void process() {

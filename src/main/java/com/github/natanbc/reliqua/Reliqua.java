@@ -2,24 +2,15 @@ package com.github.natanbc.reliqua;
 
 import com.github.natanbc.reliqua.limiter.RateLimiter;
 import com.github.natanbc.reliqua.limiter.factory.RateLimiterFactory;
-import com.github.natanbc.reliqua.request.PendingRequest;
-import com.github.natanbc.reliqua.request.RequestContext;
-import com.github.natanbc.reliqua.util.ErrorHandler;
 import com.github.natanbc.reliqua.util.PendingRequestBuilder;
-import com.github.natanbc.reliqua.util.ResponseMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import java.util.function.IntPredicate;
 
 /**
  * Used to create REST API wrappers, providing a rate limiter and easy way to have both synchronous and asynchronous
@@ -27,7 +18,6 @@ import java.util.function.IntPredicate;
  */
 @SuppressWarnings({"unused", "WeakerAccess"})
 public abstract class Reliqua {
-    private final Map<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
     private final RateLimiterFactory rateLimiterFactory;
     private final OkHttpClient client;
     private boolean trackCallSites;
@@ -95,6 +85,15 @@ public abstract class Reliqua {
     @CheckReturnValue
     public boolean isTrackingCallSites() {
         return trackCallSites;
+    }
+
+    /**
+     * Returns the rate limiter factory used to create limiters.
+     *
+     * @return The rate limiter factory.
+     */
+    public RateLimiterFactory getRateLimiterFactory() {
+        return rateLimiterFactory;
     }
 
     /**
