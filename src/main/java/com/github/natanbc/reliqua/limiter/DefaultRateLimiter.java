@@ -78,12 +78,6 @@ public class DefaultRateLimiter extends RateLimiter {
     protected void checkCooldownReset() {
         synchronized(this) {
             if(ratelimitTimeResetFuture != null) {
-                executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
-                if(callback != null) {
-                    try {
-                        callback.requestRateLimited();
-                    } catch(Exception ignored) {}
-                }
                 return;
             }
             ratelimitTimeResetFuture = executor.schedule(()->{
