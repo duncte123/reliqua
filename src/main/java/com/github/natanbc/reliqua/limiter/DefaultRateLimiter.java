@@ -75,6 +75,31 @@ public class DefaultRateLimiter extends RateLimiter {
         return Math.max(ratelimitResetTime.get() - System.nanoTime(), parent == null ? 0 : parent.rateLimitResetNanos());
     }
 
+    protected void checkCooldownReset() {
+        synchronized(this) {
+            if(ratelimitTimeResetFuture != null) {
+                executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
+                if(callback != null) {
+                    try {
+                        callback.requestRateLimited();
+                    } catch(Exception ignored) {}
+                }
+                return;
+            }
+            ratelimitTimeResetFuture = executor.schedule(()->{
+                ratelimitResetTime.set(0);
+                requestsDone.set(0);
+                ratelimitTimeResetFuture = null;
+                if(callback != null) {
+                    try {
+                        callback.rateLimitReset();
+                    } catch(Exception ignored) {}
+                }
+            }, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
+            executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
+        }
+    }
+
     protected void process() {
         Runnable r = pendingRequests.peek();
         if(r == null) return;
@@ -93,31 +118,10 @@ public class DefaultRateLimiter extends RateLimiter {
         }
         if(!canExecuteRequest()) {
             pendingRequests.addFirst(task);
-            synchronized(this) {
-                if(ratelimitTimeResetFuture != null) {
-                    executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
-                    if(callback != null) {
-                        try {
-                            callback.requestRateLimited();
-                        } catch(Exception ignored) {}
-                    }
-                    return;
-                }
-                ratelimitTimeResetFuture = executor.schedule(()->{
-                    ratelimitResetTime.set(0);
-                    requestsDone.set(0);
-                    ratelimitTimeResetFuture = null;
-                    if(callback != null) {
-                        try {
-                            callback.rateLimitReset();
-                        } catch(Exception ignored) {}
-                    }
-                }, cooldownMillis, TimeUnit.MILLISECONDS);
-                executor.schedule(this::process, cooldownMillis, TimeUnit.MILLISECONDS);
-                return;
-            }
+            return;
         }
         task.run();
         ratelimitResetTime.compareAndSet(0, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(cooldownMillis));
+        checkCooldownReset();
     }
 }

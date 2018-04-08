@@ -265,11 +265,14 @@ public abstract class PendingRequest<T> {
             int idx = list.size();
             //fill list with nulls so we can use List#set(int, Object)
             list.add(null);
-            CompletableFuture<T> f2 = new CompletableFuture<T>().whenComplete((result,error)->{
+            CompletableFuture<T> f2 = new CompletableFuture<>();
+            f2.whenComplete((result,error)->{
                 list.set(idx, new Result<>(result, error));
-                if(list.size() == requestCount) {
-                    f.complete(Collections.unmodifiableList(list));
+                for(Result<T> r : list) {
+                    //once none are null we're done
+                    if(r == null) return;
                 }
+                f.complete(list);
             });
             request.async(f2::complete, f2::completeExceptionally);
         }
