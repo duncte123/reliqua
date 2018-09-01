@@ -15,6 +15,17 @@ public interface StatusCodeValidator extends IntPredicate {
 
     @CheckReturnValue
     @Nonnull
+    static StatusCodeValidator acceptAny(int... codes) {
+        return c->{
+            for(int i : codes) {
+                if(c == i) return true;
+            }
+            return false;
+        };
+    }
+
+    @CheckReturnValue
+    @Nonnull
     static StatusCodeValidator accept(int code) {
         return c->c == code;
     }

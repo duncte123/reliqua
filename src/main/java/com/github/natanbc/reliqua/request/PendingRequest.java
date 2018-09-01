@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
@@ -141,7 +142,7 @@ public abstract class PendingRequest<T> {
      * @return A future representing this request.
      */
     @Nonnull
-    public Future<T> submit() {
+    public CompletionStage<T> submit() {
         CompletableFuture<T> future = new CompletableFuture<>();
         async(future::complete, future::completeExceptionally);
         return future;
@@ -154,7 +155,7 @@ public abstract class PendingRequest<T> {
      */
     public T execute() {
         try {
-            return submit().get();
+            return submit().toCompletableFuture().get();
         } catch(ExecutionException e) {
             throw new RequestException(e.getCause());
         } catch(InterruptedException e) {
