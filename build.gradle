@@ -9,7 +9,7 @@ plugins {
 
 def versionObj = new Version(major: 2, minor: 4, revision: getBuildNum())
 
-group 'com.github.natanbc'
+group 'me.duncte123'
 version "${versionObj}"
 
 sourceCompatibility = 1.8
