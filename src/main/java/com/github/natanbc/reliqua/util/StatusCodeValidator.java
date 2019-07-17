@@ -9,7 +9,7 @@ import java.util.function.IntPredicate;
 @FunctionalInterface
 public interface StatusCodeValidator extends IntPredicate {
     StatusCodeValidator ACCEPT_ALL = code->true;
-    StatusCodeValidator ACCEPT_2XX = code->code % 100 == 2;
+    StatusCodeValidator ACCEPT_2XX = code->code > 199 && code < 300;
     StatusCodeValidator ACCEPT_200 = code->code == 200;
     StatusCodeValidator ACCEPT_204 = code->code == 204;
 

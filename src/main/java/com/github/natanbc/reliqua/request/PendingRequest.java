@@ -201,6 +201,8 @@ public abstract class PendingRequest<T> {
                                 if(body != null) {
                                     body.close();
                                 }
+
+                                response.close();
                             }
                             return;
                         }
@@ -210,6 +212,8 @@ public abstract class PendingRequest<T> {
                             if(body != null) {
                                 body.close();
                             }
+
+                            response.close();
                         }
                     } catch(RequestException e) {
                         finalOnError.accept(e);

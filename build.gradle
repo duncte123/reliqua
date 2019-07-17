@@ -7,7 +7,7 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '2.0.1'
 }
 
-def versionObj = new Version(major: 2, minor: 4, revision: 0)
+def versionObj = new Version(major: 2, minor: 4, revision: 1)
 
 group 'com.github.natanbc'
 version "${versionObj}"
@@ -22,7 +22,7 @@ repositories {
 
 dependencies {
     //HTTP
-    compile 'com.squareup.okhttp3:okhttp:3.9.0'
+    compile 'com.squareup.okhttp3:okhttp:4.0.1'
 
     //Code safety
     compile 'com.google.code.findbugs:jsr305:3.0.2'
@@ -65,14 +65,14 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 
 bintray {
     project.version = "${versionObj}"
-    user = bintrayUsername
-    key = bintrayApiKey
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
     publications = ["BintrayRelease"]
     pkg {
         repo = 'maven'
         name = 'reliqua'
         licenses = ['Apache-2.0']
-        vcsUrl = 'https://github.com/natanbc/reliqua.git'
+        vcsUrl = 'https://github.com/duncte123/reliqua.git'
         publish = true
         version {
             name = project.version
@@ -94,18 +94,8 @@ publishing {
     }
 }
 
-String getProjectProperty(String propertyName)
-{
-    String property = ""
-    if (hasProperty(propertyName))
-    {
-        property = project.properties[propertyName]
-    }
-    return property
-}
-
-task wrapper(type: Wrapper) {
-    gradleVersion = '3.5'
+wrapper {
+    gradleVersion = '5.5.1'
 }
 
 
@@ -127,8 +117,8 @@ build {
 bintrayUpload {
     dependsOn build
 
-    onlyIf { !getProjectProperty("bintrayUsername").empty }
-    onlyIf { !getProjectProperty("bintrayApiKey").empty }
+    onlyIf { !System.getenv('BINTRAY_USER').empty }
+    onlyIf { !System.getenv('BINTRAY_KEY').empty }
 }
 
 class Version {
