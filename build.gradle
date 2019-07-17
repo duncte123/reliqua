@@ -7,7 +7,7 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '2.0.1'
 }
 
-def versionObj = new Version(major: 2, minor: 4, revision: 1)
+def versionObj = new Version(major: 2, minor: 4, revision: getBuildNum())
 
 group 'com.github.natanbc'
 version "${versionObj}"
@@ -128,4 +128,8 @@ class Version {
     String toString() {
         "${major}.${minor}" + (revision == "0" ? "" : ".${revision}")
     }
+}
+
+static def getBuildNum () {
+    return System.getenv('CIRCLE_BUILD_NUM') ?: 'dev'
 }
