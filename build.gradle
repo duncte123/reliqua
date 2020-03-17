@@ -22,7 +22,7 @@ repositories {
 
 dependencies {
     //HTTP
-    compile 'com.squareup.okhttp3:okhttp:4.0.1'
+    compile 'com.squareup.okhttp3:okhttp:3.14.7'
 
     //Code safety
     compile 'com.google.code.findbugs:jsr305:3.0.2'
