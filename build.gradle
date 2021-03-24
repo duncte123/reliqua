@@ -1,13 +1,12 @@
 plugins {
-    id 'com.jfrog.bintray' version '1.8.4'
-    id 'java'
+    id 'java-library'
     id 'maven'
     id 'maven-publish'
     id 'com.github.ben-manes.versions' version '0.13.0'
     id 'com.github.johnrengelman.shadow' version '4.0.4'
 }
 
-def versionObj = new Version(major: 2, minor: 4, revision: getBuildNum())
+def versionObj = new Version(major: 2, minor: 5, revision: getBuildNum())
 
 group 'me.duncte123'
 version "${versionObj}"
@@ -63,41 +62,43 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     from javadoc.destinationDir
 }
 
-bintray {
-    project.version = "${versionObj}"
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
-    publications = ["BintrayRelease"]
-    pkg {
-        repo = 'maven'
-        name = 'reliqua'
-        licenses = ['Apache-2.0']
-        vcsUrl = 'https://github.com/duncte123/reliqua.git'
-        publish = true
-        version {
-            name = project.version
-            released = new Date()
-        }
+publish {
+    dependsOn build
+
+    onlyIf {
+        System.getenv("JFROG_USERNAME") != null && System.getenv("JFROG_TOKEN") != null
     }
 }
 
 publishing {
     publications {
-        BintrayRelease(MavenPublication) {
+        maven(MavenPublication) {
             from components.java
-            groupId group
-            artifactId archivesBaseName
-            version version
+
+            artifactId 'reliqua'
+            groupId project.group
+            version project.version
+
             artifact javadocJar
             artifact sourcesJar
+        }
+    }
+    repositories {
+        maven {
+            name =  "jfrog"
+            url = "https://duncte123.jfrog.io/artifactory/maven/"
+            credentials {
+                username = System.getenv("JFROG_USERNAME")
+                password = System.getenv("JFROG_TOKEN")
+            }
         }
     }
 }
 
 wrapper {
-    gradleVersion = '5.5.1'
+    gradleVersion = '6.8'
+    distributionType = Wrapper.DistributionType.ALL
 }
-
 
 build {
     dependsOn clean
@@ -114,13 +115,6 @@ build {
     shadowJar.mustRunAfter sourcesJar
 }
 
-bintrayUpload {
-    dependsOn build
-
-    onlyIf { !System.getenv('BINTRAY_USER').empty }
-    onlyIf { !System.getenv('BINTRAY_KEY').empty }
-}
-
 class Version {
     String major, minor, revision
 
@@ -131,5 +125,5 @@ class Version {
 }
 
 static def getBuildNum () {
-    return System.getenv('CIRCLE_BUILD_NUM') ?: 'dev'
+    return System.getenv('GITHUB_RUN_NUMBER') ?: 'dev'
 }

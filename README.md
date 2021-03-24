@@ -1,5 +1,5 @@
 # reliqua
-[ ![Download](https://api.bintray.com/packages/natanbc/maven/reliqua/images/download.svg?version=1.0) ](https://bintray.com/natanbc/maven/reliqua/1.0/link)
+[ ![Download](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Fduncte123.jfrog.io%2Fartifactory%2Fmaven%2Fme%2Fduncte123%2Freliqua%2Fmaven-metadata.xml) ](https://duncte123.jfrog.io/ui/packages/gav:%2F%2Fme.duncte123:weebJava)
 
 A lightweight framework to build REST API wrappers in Java, with built in rate limiting and common API for both sync and async requests. The name is latin for "rest"
 

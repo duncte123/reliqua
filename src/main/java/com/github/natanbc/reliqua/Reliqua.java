@@ -8,9 +8,7 @@ import okhttp3.Request;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Used to create REST API wrappers, providing a rate limiter and easy way to have both synchronous and asynchronous
@@ -54,7 +52,10 @@ public abstract class Reliqua {
      * Creates a new reliqua with no rate limiter and with call site tracking disabled.
      */
     protected Reliqua() {
-        this(new OkHttpClient());
+        this(new OkHttpClient.Builder()
+                .followRedirects(false)
+                .followSslRedirects(true)
+                .build());
     }
 
     /**

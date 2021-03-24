@@ -22,7 +22,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
-import java.util.function.IntPredicate;
 
 /**
  * This class represents a request which has not yet been scheduled to execute.
@@ -42,27 +41,17 @@ public abstract class PendingRequest<T> {
     private final Reliqua api;
     private final Request httpRequest;
     private final StatusCodeValidator statusCodeValidator;
-    private RateLimiter rateLimiter;
+    private final RateLimiter rateLimiter;
 
     public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
         this.api = Objects.requireNonNull(api, "API may not be null");
         this.rateLimiter = rateLimiter;
         this.httpRequest = Objects.requireNonNull(httpRequest, "HTTP request may not be null");
-        this.statusCodeValidator = statusCodeValidator == null ? ignored->true : statusCodeValidator;
-    }
-
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
-        this(api, rateLimiter, httpRequest, StatusCodeValidator.wrap(statusCodeValidator));
+        this.statusCodeValidator = statusCodeValidator == null ? StatusCodeValidator.ACCEPT_ALL : statusCodeValidator;
     }
 
     public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
         this(api, null, httpRequest, statusCodeValidator);
-    }
-
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable IntPredicate statusCodeValidator) {
-        this(api, httpRequest, StatusCodeValidator.wrap(statusCodeValidator));
     }
 
     public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest) {
@@ -82,22 +71,12 @@ public abstract class PendingRequest<T> {
         );
     }
 
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
-        this(api, rateLimiter, httpRequestBuilder, StatusCodeValidator.wrap(statusCodeValidator));
-    }
-
     public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
         this(
                 api,
                 Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
                 statusCodeValidator
         );
-    }
-
-    @Deprecated
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable IntPredicate statusCodeValidator) {
-        this(api, httpRequestBuilder, StatusCodeValidator.wrap(statusCodeValidator));
     }
 
     public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder) {
