@@ -103,7 +103,9 @@ public abstract class PendingRequest<T> {
      */
     @Nonnull
     public CompletionStage<T> submit() {
-        return this.future;
+        CompletableFuture<T> future = new CompletableFuture<>();
+        async(future::complete, future::completeExceptionally);
+        return future;
     }
 
     /**
