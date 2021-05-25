@@ -145,55 +145,40 @@ public abstract class PendingRequest<T> {
 
     private void executeInternally(@Nonnull Consumer<T> onSuccess, @Nonnull Consumer<RequestException> onError) {
         final StackTraceElement[] callSite = api.isTrackingCallSites() ? Thread.currentThread().getStackTrace() : null;
-        api.getClient().newCall(httpRequest).enqueue(new Callback() {
-             @Override
-             public void onFailure(@Nonnull Call call, @Nonnull IOException e) {
-                 future.completeExceptionally(new RequestException(e, callSite));
-             }
+        try (final Response response = api.getClient().newCall(httpRequest).execute()) {
+            rateLimiter.update(response);
+            final int code = response.code();
 
-             @Override
-             public void onResponse(@Nonnull Call call, @Nonnull Response response) {
-                 try {
-                     rateLimiter.update(response);
+            if (code == RateLimiter.RATE_LIMIT_CODE) {
+                rateLimiter.backoffQueue();
+                return;
+            }
 
-                     final ResponseBody body = response.body();
-                     final int code = response.code();
+            final ResponseBody body = response.body();
 
-                     if (code == RateLimiter.RATE_LIMIT_CODE) {
-                         rateLimiter.backoffQueue();
-                         return;
-                     }
+            if(!statusCodeValidator.test(code)) {
+                try {
+                    onError(new RequestContext<>(callSite, onSuccess, onError, response));
+                } finally {
+                    if(body != null) {
+                        body.close();
+                    }
+                }
+                return;
+            }
 
-                     if(!statusCodeValidator.test(code)) {
-                         try {
-                             onError(new RequestContext<>( callSite, onSuccess, onError, response));
-                         } finally {
-                             if(body != null) {
-                                 body.close();
-                             }
-
-                             response.close();
-                         }
-                         return;
-                     }
-
-                     try {
-                         future.complete(onSuccess(response));
-                     } finally {
-                         if(body != null) {
-                             body.close();
-                         }
-
-                         response.close();
-                     }
-
-                 } catch(RequestException e) {
-                     future.completeExceptionally(e);
-                 } catch(Exception e) {
-                     future.completeExceptionally(new RequestException(e, callSite));
-                 }
-             }
-        });
+            try {
+                future.complete(onSuccess(response));
+            } finally {
+                if(body != null) {
+                    body.close();
+                }
+            }
+        } catch(RequestException e) {
+            future.completeExceptionally(e);
+        } catch (Exception e) {
+            future.completeExceptionally(new RequestException(e, callSite));
+        }
     }
 
     /**

@@ -15,7 +15,7 @@ public class DefaultRateLimiter extends RateLimiter {
     protected final Reliqua api;
     protected final BlockingQueue<LimiterPair> pendingRequests = new LinkedBlockingQueue<>();
     protected final ScheduledExecutorService executor;
-    protected boolean isQueued;
+    protected boolean isQueued = false;
 
     /**
      * Creates a new rate limiter.
@@ -29,11 +29,7 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     public DefaultRateLimiter(Reliqua api, String key) {
-        this(api, Executors.newSingleThreadScheduledExecutor((r) -> {
-            final Thread t = new Thread(r, "Reliqua ratelimiter: " + key);
-            t.setDaemon(true);
-            return t;
-        }));
+        this(api, Executors.newSingleThreadScheduledExecutor((r) -> new Thread(r, "Reliqua ratelimiter: " + key)));
     }
 
     @Override
