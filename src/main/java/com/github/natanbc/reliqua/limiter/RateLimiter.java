@@ -1,14 +1,14 @@
 package com.github.natanbc.reliqua.limiter;
 
-import com.github.natanbc.reliqua.limiter.bucket.DirectBucket;
-import com.github.natanbc.reliqua.limiter.bucket.IBucket;
+import okhttp3.Response;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 
-@SuppressWarnings("unused")
 public abstract class RateLimiter {
+    public static final int RATE_LIMIT_CODE = 429;
+
     /**
      * Callback to be notified about rate limits.
      *
@@ -54,16 +54,30 @@ public abstract class RateLimiter {
     public abstract long getTimeUntilReset();
 
     /**
-     * Returns the bucket for this rate-limiter
+     * Returns if the request was rate-limited
      *
-     * @return The bucket for this rate-limiter
+     * @return true if the request was rate-limited
      */
-    public abstract IBucket getBucket();
+    public abstract boolean isRateLimit();
+
+    /**
+     * Returns the value of the retry-after header in seconds
+     *
+     * @return The value of the retry-after header in seconds
+     */
+    public abstract long retryAfter();
+
+    /**
+     * Updates the bucket with the latest rate limit headers
+     *
+     * @param response The response with the headers
+     */
+    public abstract void update(@Nonnull Response response);
 
     /**
      * Calls a backoff to the queue and forces it to wait with the next request
      */
-    public abstract void backoff();
+    public abstract void backoffQueue();
 
     /**
      * Creates a new rate limiter that does no handling of rate limits, useful for situations where few requests are made.
@@ -80,7 +94,6 @@ public abstract class RateLimiter {
 
     private static class DirectLimiter extends RateLimiter {
         static final DirectLimiter INSTANCE = new DirectLimiter();
-        private static final DirectBucket bucket = new DirectBucket();
 
         private DirectLimiter() {}
 
@@ -90,12 +103,20 @@ public abstract class RateLimiter {
         }
 
         @Override
-        public IBucket getBucket() {
-            return bucket;
+        public void backoffQueue() {}
+
+        @Override
+        public boolean isRateLimit() {
+            return false;
         }
 
         @Override
-        public void backoff() {}
+        public long retryAfter() {
+            return 0;
+        }
+
+        @Override
+        public void update(@Nonnull Response response) {}
 
         @Override
         public int getRemainingRequests() {

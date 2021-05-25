@@ -2,8 +2,6 @@ package com.github.natanbc.reliqua.request;
 
 import com.github.natanbc.reliqua.Reliqua;
 import com.github.natanbc.reliqua.limiter.LimiterPair;
-import com.github.natanbc.reliqua.limiter.bucket.IBucket;
-import com.github.natanbc.reliqua.limiter.bucket.RateLimitBucket;
 import com.github.natanbc.reliqua.limiter.RateLimiter;
 import com.github.natanbc.reliqua.util.StatusCodeValidator;
 import okhttp3.Call;
@@ -156,14 +154,13 @@ public abstract class PendingRequest<T> {
              @Override
              public void onResponse(@Nonnull Call call, @Nonnull Response response) {
                  try {
-                     final IBucket bucket = rateLimiter.getBucket();
-                     bucket.update(response);
+                     rateLimiter.update(response);
 
                      final ResponseBody body = response.body();
                      final int code = response.code();
 
-                     if (code == RateLimitBucket.RATE_LIMIT_CODE) {
-                         rateLimiter.backoff();
+                     if (code == RateLimiter.RATE_LIMIT_CODE) {
+                         rateLimiter.backoffQueue();
                          return;
                      }
 

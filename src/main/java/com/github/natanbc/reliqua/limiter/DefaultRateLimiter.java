@@ -1,15 +1,17 @@
 package com.github.natanbc.reliqua.limiter;
 
 import com.github.natanbc.reliqua.Reliqua;
-import com.github.natanbc.reliqua.limiter.bucket.IBucket;
-import com.github.natanbc.reliqua.limiter.bucket.RateLimitBucket;
 import com.github.natanbc.reliqua.limiter.factory.RateLimiterFactory;
+import okhttp3.Response;
 
 import javax.annotation.Nonnull;
 import java.util.concurrent.*;
 
 public class DefaultRateLimiter extends RateLimiter {
-    protected final RateLimitBucket bucket = new RateLimitBucket();
+    public long resetTime;
+    public int remainingUses;
+    public int limit = Integer.MAX_VALUE;
+
     protected final Reliqua api;
     protected final BlockingQueue<LimiterPair> pendingRequests = new LinkedBlockingQueue<>();
     protected final ScheduledExecutorService executor;
@@ -47,12 +49,22 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     @Override
-    public void backoff() {
-        this.backoffQueue();
+    public synchronized boolean isRateLimit() {
+        if (retryAfter() <= 0) {
+            remainingUses = limit;
+        }
+
+        return remainingUses <= 0;
     }
 
-    protected void backoffQueue() {
-        final long delay = bucket.retryAfter();
+    @Override
+    public synchronized long retryAfter() {
+        return resetTime - System.currentTimeMillis();
+    }
+
+    @Override
+    public void backoffQueue() {
+        final long delay = retryAfter();
         executor.schedule(this::drainQueue, delay, TimeUnit.MILLISECONDS);
     }
 
@@ -75,18 +87,13 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     @Override
-    public IBucket getBucket() {
-        return bucket;
-    }
-
-    @Override
     public int getRemainingRequests() {
-        return this.bucket.remainingUses;
+        return this.remainingUses;
     }
 
     @Override
     public long getTimeUntilReset() {
-        return this.bucket.resetTime;
+        return this.resetTime;
     }
 
     protected boolean handle(LimiterPair pair) {
@@ -97,7 +104,53 @@ public class DefaultRateLimiter extends RateLimiter {
 
         pair.getRunnable().run();
 
-        return !this.bucket.isRateLimit();
+        return !this.isRateLimit();
+    }
+
+    private synchronized void handleRatelimit(Response response, long current) {
+        final String retryAfter = response.header("Retry-After");
+        final String limitHeader = response.header("X-RateLimit-Limit", "5");
+        long delay;
+
+        if (retryAfter == null) { // this should never happen
+            delay = 30000; // 30 seconds as fallback
+        } else {
+            delay = Long.parseLong(retryAfter) * 1000;
+        }
+
+        // LOG.error("Encountered 429, retrying after {} ms", delay);
+        resetTime = current + delay;
+        remainingUses = 0;
+        //noinspection ConstantConditions
+        limit = Integer.parseInt(limitHeader);
+    }
+
+    private synchronized void update0(Response response) {
+        final long current = System.currentTimeMillis();
+        final boolean is429 = response.code() == RATE_LIMIT_CODE;
+        final String remainingHeader = response.header("X-RateLimit-Remaining");
+        final String limitHeader = response.header("X-RateLimit-Limit");
+        final String resetHeader = response.header("X-RateLimit-Reset-After");
+
+        if (is429) {
+            handleRatelimit(response, current);
+            return;
+            // TODO: add logging?
+        } else if (remainingHeader == null || limitHeader == null || resetHeader == null) {
+            // LOG.debug("Failed to update buckets due to missing headers in response with code: {} and headers: \n{}", response.code(), response.headers());
+            return;
+        }
+
+        remainingUses = Integer.parseInt(remainingHeader);
+        limit = Integer.parseInt(limitHeader);
+        final long reset = (long) Math.ceil(Double.parseDouble(resetHeader)); // relative seconds
+        final long delay = reset * 1000;
+        resetTime = current + delay;
+    }
+
+    @Override
+    public void update(@Nonnull Response response) {
+        update0(response);
     }
 
     public static class Factory extends RateLimiterFactory {
