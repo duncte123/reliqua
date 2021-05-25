@@ -1,12 +1,11 @@
 plugins {
     id 'java-library'
-    id 'maven'
     id 'maven-publish'
     id 'com.github.ben-manes.versions' version '0.13.0'
-    id 'com.github.johnrengelman.shadow' version '4.0.4'
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
 }
 
-def versionObj = new Version(major: 2, minor: 5, revision: getBuildNum())
+def versionObj = new Version(major: 2, minor: 6, revision: getBuildNum())
 
 group 'me.duncte123'
 version "${versionObj}"
@@ -16,15 +15,14 @@ targetCompatibility = 1.8
 
 repositories {
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
     //HTTP
-    compile 'com.squareup.okhttp3:okhttp:3.14.7'
+    implementation 'com.squareup.okhttp3:okhttp:3.14.7'
 
     //Code safety
-    compile 'com.google.code.findbugs:jsr305:3.0.2'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
 }
 
 task sourcesForRelease(type: Copy) {
@@ -96,7 +94,7 @@ publishing {
 }
 
 wrapper {
-    gradleVersion = '6.8'
+    gradleVersion = '7.0.2'
     distributionType = Wrapper.DistributionType.ALL
 }
 

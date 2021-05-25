@@ -1,5 +1,8 @@
 package com.github.natanbc.reliqua.limiter;
 
+import com.github.natanbc.reliqua.limiter.bucket.DirectBucket;
+import com.github.natanbc.reliqua.limiter.bucket.IBucket;
+
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
@@ -10,7 +13,10 @@ public abstract class RateLimiter {
      * Callback to be notified about rate limits.
      *
      * <br>The routes given to the callbacks might be null in case of a global rate limit.
+     *
+     * @deprecated this is not used anywhere in the code
      */
+    @Deprecated
     public interface Callback {
         /**
          * Called when an attempted request is rate limited. Might be called more than once per request
@@ -28,7 +34,7 @@ public abstract class RateLimiter {
      *
      * @param task Task to be executed.
      */
-    public abstract void queue(@Nonnull Runnable task);
+    public abstract void queue(@Nonnull LimiterPair task);
 
     /**
      * Get how many requests may still be done before the rate limit is hit and no more requests can be made.
@@ -48,33 +54,16 @@ public abstract class RateLimiter {
     public abstract long getTimeUntilReset();
 
     /**
-     * Creates a child rate limiter, whose requests increase this limiter's counter, but have a separate cooldown.
+     * Returns the bucket for this rate-limiter
      *
-     * @param requests Requests that can be done before needing a cooldown.
-     * @param cooldown Cooldown time, in milliseconds.
-     * @param callback Callback to be notified about rate limits.
-     *
-     * @return A new child rate limiter.
+     * @return The bucket for this rate-limiter
      */
-    @CheckReturnValue
-    @Nonnull
-    public RateLimiter createChildLimiter(int requests, long cooldown, Callback callback) {
-        throw new UnsupportedOperationException();
-    }
+    public abstract IBucket getBucket();
 
     /**
-     * Creates a child rate limiter, whose requests increase this limiter's counter, but have a separate cooldown.
-     *
-     * @param requests Requests that can be done before needing a cooldown.
-     * @param cooldown Cooldown time, in milliseconds.
-     *
-     * @return A new child rate limiter.
+     * Calls a backoff to the queue and forces it to wait with the next request
      */
-    @CheckReturnValue
-    @Nonnull
-    public RateLimiter createChildLimiter(int requests, long cooldown) {
-        return createChildLimiter(requests, cooldown, null);
-    }
+    public abstract void backoff();
 
     /**
      * Creates a new rate limiter that does no handling of rate limits, useful for situations where few requests are made.
@@ -91,13 +80,22 @@ public abstract class RateLimiter {
 
     private static class DirectLimiter extends RateLimiter {
         static final DirectLimiter INSTANCE = new DirectLimiter();
+        private static final DirectBucket bucket = new DirectBucket();
 
         private DirectLimiter() {}
 
         @Override
-        public void queue(@Nonnull Runnable task) {
-            task.run();
+        public void queue(@Nonnull LimiterPair task) {
+            task.getRunnable().run();
         }
+
+        @Override
+        public IBucket getBucket() {
+            return bucket;
+        }
+
+        @Override
+        public void backoff() {}
 
         @Override
         public int getRemainingRequests() {
@@ -107,12 +105,6 @@ public abstract class RateLimiter {
         @Override
         public long getTimeUntilReset() {
             return 0;
-        }
-
-        @Nonnull
-        @Override
-        public RateLimiter createChildLimiter(int requests, long cooldown) {
-            return this;
         }
     }
 }

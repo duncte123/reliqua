@@ -1,6 +1,9 @@
 package com.github.natanbc.reliqua.request;
 
 import com.github.natanbc.reliqua.Reliqua;
+import com.github.natanbc.reliqua.limiter.LimiterPair;
+import com.github.natanbc.reliqua.limiter.bucket.IBucket;
+import com.github.natanbc.reliqua.limiter.bucket.RateLimitBucket;
 import com.github.natanbc.reliqua.limiter.RateLimiter;
 import com.github.natanbc.reliqua.util.StatusCodeValidator;
 import okhttp3.Call;
@@ -36,33 +39,25 @@ import java.util.function.Consumer;
  *
  * @param <T> The type of object returned by this request.
  */
-@SuppressWarnings({"WeakerAccess", "unused"})
 public abstract class PendingRequest<T> {
     private final Reliqua api;
     private final Request httpRequest;
     private final StatusCodeValidator statusCodeValidator;
     private final RateLimiter rateLimiter;
+    public final CompletableFuture<T> future = new CompletableFuture<>();
 
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull RateLimiter rateLimiter, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
         this.api = Objects.requireNonNull(api, "API may not be null");
         this.rateLimiter = rateLimiter;
         this.httpRequest = Objects.requireNonNull(httpRequest, "HTTP request may not be null");
         this.statusCodeValidator = statusCodeValidator == null ? StatusCodeValidator.ACCEPT_ALL : statusCodeValidator;
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest, @Nullable StatusCodeValidator statusCodeValidator) {
-        this(api, null, httpRequest, statusCodeValidator);
-    }
-
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request httpRequest) {
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull RateLimiter rateLimiter, @Nonnull Request httpRequest) {
         this(api, rateLimiter, httpRequest, null);
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request httpRequest) {
-        this(api, httpRequest, null);
-    }
-
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
         this(
                 api,
                 rateLimiter,
@@ -71,20 +66,8 @@ public abstract class PendingRequest<T> {
         );
     }
 
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder, @Nullable StatusCodeValidator statusCodeValidator) {
-        this(
-                api,
-                Objects.requireNonNull(httpRequestBuilder, "HTTP request builder may not be null").build(),
-                statusCodeValidator
-        );
-    }
-
-    public PendingRequest(@Nonnull Reliqua api, @Nullable RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder) {
+    public PendingRequest(@Nonnull Reliqua api, @Nonnull RateLimiter rateLimiter, @Nonnull Request.Builder httpRequestBuilder) {
         this(api, rateLimiter, httpRequestBuilder, null);
-    }
-
-    public PendingRequest(@Nonnull Reliqua api, @Nonnull Request.Builder httpRequestBuilder) {
-        this(api, httpRequestBuilder, null);
     }
 
     public Reliqua getApi() {
@@ -122,9 +105,7 @@ public abstract class PendingRequest<T> {
      */
     @Nonnull
     public CompletionStage<T> submit() {
-        CompletableFuture<T> future = new CompletableFuture<>();
-        async(future::complete, future::completeExceptionally);
-        return future;
+        return this.future;
     }
 
     /**
@@ -150,64 +131,72 @@ public abstract class PendingRequest<T> {
      * @param onError Called when there's an error executing the request or parsing the response.
      */
     public void async(@Nullable Consumer<T> onSuccess, @Nullable Consumer<RequestException> onError) {
-        StackTraceElement[] callSite = api.isTrackingCallSites() ? Thread.currentThread().getStackTrace() : null;
-        if(onSuccess == null) onSuccess = v->{};
+        if(onSuccess == null) onSuccess = v -> {};
         if(onError == null) onError = Throwable::printStackTrace;
 
         Consumer<T> finalOnSuccess = onSuccess;
         Consumer<RequestException> finalOnError = onError;
 
-        Runnable r = ()->
-            api.getClient().newCall(httpRequest).enqueue(new Callback() {
-                @Override
-                public void onFailure(@Nonnull Call call, @Nonnull IOException e) {
-                    finalOnError.accept(new RequestException(e, callSite));
-                }
+        this.future.thenAccept(finalOnSuccess).exceptionally((thr) -> {
+            finalOnError.accept((RequestException) thr);
+            return null;
+        });
 
-                @Override
-                public void onResponse(@Nonnull Call call, @Nonnull Response response) {
-                    try {
-                        ResponseBody body = response.body();
-                        if(!statusCodeValidator.test(response.code())) {
-                            try {
-                                onError(new RequestContext<>(
-                                        callSite,
-                                        finalOnSuccess,
-                                        finalOnError,
-                                        response
-                                ));
-                            } finally {
-                                if(body != null) {
-                                    body.close();
-                                }
+        rateLimiter.queue(new LimiterPair(this, () -> this.executeInternally(finalOnSuccess, finalOnError)));
+    }
 
-                                response.close();
-                            }
-                            return;
-                        }
-                        try {
-                            finalOnSuccess.accept(onSuccess(response));
-                        } finally {
-                            if(body != null) {
-                                body.close();
-                            }
+    private void executeInternally(@Nonnull Consumer<T> onSuccess, @Nonnull Consumer<RequestException> onError) {
+        final StackTraceElement[] callSite = api.isTrackingCallSites() ? Thread.currentThread().getStackTrace() : null;
+        api.getClient().newCall(httpRequest).enqueue(new Callback() {
+             @Override
+             public void onFailure(@Nonnull Call call, @Nonnull IOException e) {
+                 future.completeExceptionally(new RequestException(e, callSite));
+             }
 
-                            response.close();
-                        }
-                    } catch(RequestException e) {
-                        finalOnError.accept(e);
-                    } catch(Exception e) {
-                        finalOnError.accept(new RequestException(e, callSite));
-                    }
-                }
-            }
-        );
+             @Override
+             public void onResponse(@Nonnull Call call, @Nonnull Response response) {
+                 try {
+                     final IBucket bucket = rateLimiter.getBucket();
+                     bucket.update(response);
 
-        if(rateLimiter == null) {
-            r.run();
-        } else {
-            rateLimiter.queue(r);
-        }
+                     final ResponseBody body = response.body();
+                     final int code = response.code();
+
+                     if (code == RateLimitBucket.RATE_LIMIT_CODE) {
+                         rateLimiter.backoff();
+                         return;
+                     }
+
+                     if(!statusCodeValidator.test(code)) {
+                         try {
+                             onError(new RequestContext<>( callSite, onSuccess, onError, response));
+                         } finally {
+                             if(body != null) {
+                                 body.close();
+                             }
+
+                             response.close();
+                         }
+                         return;
+                     }
+
+                     try {
+                         future.complete(onSuccess(response));
+                     } finally {
+                         if(body != null) {
+                             body.close();
+                         }
+
+                         response.close();
+                     }
+
+                 } catch(RequestException e) {
+                     future.completeExceptionally(e);
+                 } catch(Exception e) {
+                     future.completeExceptionally(new RequestException(e, callSite));
+                 }
+             }
+        });
     }
 
     /**

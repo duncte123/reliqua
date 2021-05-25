@@ -1,121 +1,115 @@
 package com.github.natanbc.reliqua.limiter;
 
+import com.github.natanbc.reliqua.Reliqua;
+import com.github.natanbc.reliqua.limiter.bucket.IBucket;
+import com.github.natanbc.reliqua.limiter.bucket.RateLimitBucket;
+import com.github.natanbc.reliqua.limiter.factory.RateLimiterFactory;
+
 import javax.annotation.Nonnull;
-import java.util.Deque;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.*;
 
-@SuppressWarnings({"unused", "WeakerAccess"})
 public class DefaultRateLimiter extends RateLimiter {
-    protected final Deque<Runnable> pendingRequests = new ConcurrentLinkedDeque<>();
-    protected final AtomicInteger requestsDone = new AtomicInteger(0);
-    protected final AtomicLong ratelimitResetTime = new AtomicLong();
-    protected final DefaultRateLimiter parent;
+    protected final RateLimitBucket bucket = new RateLimitBucket();
+    protected final Reliqua api;
+    protected final BlockingQueue<LimiterPair> pendingRequests = new LinkedBlockingQueue<>();
     protected final ScheduledExecutorService executor;
-    protected final Callback callback;
-    protected final int maxRequests;
-    protected final long cooldownMillis;
-    protected Future<?> ratelimitTimeResetFuture;
-
-    private DefaultRateLimiter(DefaultRateLimiter parent, ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
-        this.parent = parent;
-        this.executor = executor;
-        this.callback = callback;
-        this.maxRequests = maxRequests;
-        this.cooldownMillis = cooldownMillis;
-    }
+    protected boolean isQueued;
 
     /**
      * Creates a new rate limiter.
      *
+     * @param api The current api instance
      * @param executor The executor to schedule cooldowns and rate limit processing.
-     * @param callback Callback to be notified about rate limiter actions.
-     * @param maxRequests Maximum amount of requests that may be done before being rate limited.
-     * @param cooldownMillis Time to reset the requests done, starting from the first request done since the last reset.
      */
-    public DefaultRateLimiter(ScheduledExecutorService executor, Callback callback, int maxRequests, long cooldownMillis) {
-        this(null, executor, callback, maxRequests, cooldownMillis);
+    public DefaultRateLimiter(Reliqua api, ScheduledExecutorService executor) {
+        this.api = api;
+        this.executor = executor;
+    }
+
+    public DefaultRateLimiter(Reliqua api, String key) {
+        this(api, Executors.newSingleThreadScheduledExecutor((r) -> {
+            final Thread t = new Thread(r, "Reliqua ratelimiter: " + key);
+            t.setDaemon(true);
+            return t;
+        }));
     }
 
     @Override
-    public void queue(@Nonnull Runnable task) {
-        pendingRequests.offer(task);
-        executor.execute(this::process);
+    public void queue(@Nonnull LimiterPair task) {
+        final boolean wasQueued = isQueued;
+        isQueued = true;
+
+        pendingRequests.add(task);
+
+        if (!wasQueued) {
+            backoffQueue();
+        }
+    }
+
+    @Override
+    public void backoff() {
+        this.backoffQueue();
+    }
+
+    protected void backoffQueue() {
+        final long delay = bucket.retryAfter();
+        executor.schedule(this::drainQueue, delay, TimeUnit.MILLISECONDS);
+    }
+
+    protected synchronized void drainQueue() {
+        boolean graceful = true;
+        while (!pendingRequests.isEmpty()) {
+            final LimiterPair r = pendingRequests.peek();
+            graceful = handle(r);
+
+            if (!graceful) {
+                break;
+            }
+        }
+
+        isQueued = !graceful;
+
+        if (this.api.isShutdown() && graceful) {
+            executor.shutdown();
+        }
+    }
+
+    @Override
+    public IBucket getBucket() {
+        return bucket;
     }
 
     @Override
     public int getRemainingRequests() {
-        return maxRequests - requestsDone.get();
+        return this.bucket.remainingUses;
     }
 
     @Override
     public long getTimeUntilReset() {
-        return TimeUnit.NANOSECONDS.toMillis(rateLimitResetNanos());
+        return this.bucket.resetTime;
     }
 
-    @Nonnull
-    @Override
-    public RateLimiter createChildLimiter(int requests, long cooldown, Callback callback) {
-        return new DefaultRateLimiter(this, executor, callback, requests, cooldown);
-    }
-
-    protected boolean isOverQuota() {
-        return (parent != null && parent.isOverQuota()) || requestsDone.get() >= maxRequests;
-    }
-
-    protected boolean canExecuteRequest() {
-        return (parent == null || parent.canExecuteRequest()) && requestsDone.incrementAndGet() <= maxRequests;
-    }
-
-    protected long rateLimitResetNanos() {
-        return Math.max(ratelimitResetTime.get() - System.nanoTime(), parent == null ? 0 : parent.rateLimitResetNanos());
-    }
-
-    protected void checkCooldownReset() {
-        synchronized(this) {
-            if(ratelimitTimeResetFuture != null) {
-                return;
-            }
-            ratelimitTimeResetFuture = executor.schedule(()->{
-                ratelimitResetTime.set(0);
-                requestsDone.set(0);
-                ratelimitTimeResetFuture = null;
-                if(callback != null) {
-                    try {
-                        callback.rateLimitReset();
-                    } catch(Exception ignored) {}
-                }
-            }, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
-            executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
+    protected boolean handle(LimiterPair pair) {
+        if (pair.getRequest().future.isDone()) {
+            pendingRequests.poll();
+            return true;
         }
+
+        pair.getRunnable().run();
+
+        return !this.bucket.isRateLimit();
     }
 
-    protected void process() {
-        Runnable r = pendingRequests.peek();
-        if(r == null) return;
-        if(isOverQuota()) {
-            executor.schedule(this::process, rateLimitResetNanos(), TimeUnit.NANOSECONDS);
-            if(callback != null) {
-                try {
-                    callback.requestRateLimited();
-                } catch(Exception ignored) {}
-            }
-            return;
+    public static class Factory extends RateLimiterFactory {
+        private final Reliqua api;
+
+        public Factory(Reliqua api) {
+            this.api = api;
         }
-        Runnable task = pendingRequests.poll();
-        if(task == null) {
-            return;
+
+        @Override
+        protected RateLimiter createRateLimiter(String key) {
+            return new DefaultRateLimiter(api, key);
         }
-        if(!canExecuteRequest()) {
-            pendingRequests.addFirst(task);
-            return;
-        }
-        task.run();
-        ratelimitResetTime.compareAndSet(0, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(cooldownMillis));
-        checkCooldownReset();
     }
 }

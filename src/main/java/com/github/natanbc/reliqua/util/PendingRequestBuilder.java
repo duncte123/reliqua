@@ -50,6 +50,12 @@ public class PendingRequestBuilder {
     @CheckReturnValue
     public <T>PendingRequest<T> build(@Nonnull ResponseMapper<T> mapper, @Nullable ErrorHandler<T> errorHandler) {
         Objects.requireNonNull(mapper, "Mapper may not be null");
+
+        // create a rate limited if it is not set
+        if (rateLimiter == null) {
+            rateLimiter = api.getRateLimiter(request.url().toString());
+        }
+
         return new PendingRequest<T>(api, rateLimiter, request, statusCodeValidator) {
             @Nullable
             @Override

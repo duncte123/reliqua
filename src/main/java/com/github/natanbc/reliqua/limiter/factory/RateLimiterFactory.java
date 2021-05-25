@@ -51,8 +51,6 @@ public abstract class RateLimiterFactory {
      * Returns a rate limiter factory whose rate limiters directly handle all requests, with no throttling.
      *
      * @return A direct rate limiter factory.
-     *
-     *
      */
     public static RateLimiterFactory directFactory() {
         return DirectFactory.INSTANCE;

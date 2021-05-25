@@ -1,5 +1,6 @@
 package com.github.natanbc.reliqua;
 
+import com.github.natanbc.reliqua.limiter.DefaultRateLimiter;
 import com.github.natanbc.reliqua.limiter.RateLimiter;
 import com.github.natanbc.reliqua.limiter.factory.RateLimiterFactory;
 import com.github.natanbc.reliqua.util.PendingRequestBuilder;
@@ -19,6 +20,7 @@ public abstract class Reliqua {
     private final RateLimiterFactory rateLimiterFactory;
     private final OkHttpClient client;
     private boolean trackCallSites;
+    private boolean shutdown = false;
 
     /**
      * Creates a new reliqua instance.
@@ -32,7 +34,7 @@ public abstract class Reliqua {
             throw new IllegalArgumentException("Client is null");
         }
         if(rateLimiterFactory == null) {
-            rateLimiterFactory = RateLimiterFactory.directFactory();
+            rateLimiterFactory = new DefaultRateLimiter.Factory(this);
         }
         this.rateLimiterFactory = rateLimiterFactory;
         this.client = client;
@@ -95,6 +97,16 @@ public abstract class Reliqua {
      */
     public RateLimiterFactory getRateLimiterFactory() {
         return rateLimiterFactory;
+    }
+
+    public boolean isShutdown() {
+        return this.shutdown;
+    }
+
+    public void shutdown() {
+        this.shutdown = true;
+        this.client.connectionPool().evictAll();
+        this.client.dispatcher().executorService().shutdown();
     }
 
     /**
