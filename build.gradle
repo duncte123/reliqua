@@ -40,23 +40,23 @@ compileJava {
 }
 
 jar {
-    baseName = project.name
+    archiveBaseName.set(project.name)
     manifest {
-        attributes 'Implementation-Version': version
+        attributes 'Implementation-Version': project.version
     }
 }
 
 shadowJar {
-    classifier = "withDependencies"
+    archiveClassifier.set('withDependencies')
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
+    archiveClassifier.set('sources')
     from "${buildDir}/filteredSrc"
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
+    archiveClassifier.set('javadoc')
     from javadoc.destinationDir
 }
 
