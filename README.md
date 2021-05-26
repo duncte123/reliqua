@@ -1,5 +1,5 @@
 # reliqua
-[ ![Download](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Fduncte123.jfrog.io%2Fartifactory%2Fmaven%2Fme%2Fduncte123%2Freliqua%2Fmaven-metadata.xml) ](https://duncte123.jfrog.io/ui/packages/gav:%2F%2Fme.duncte123:weebJava)
+[ ![Download][badge] ][download]
 
 A lightweight framework to build REST API wrappers in Java, with built in rate limiting and common API for both sync and async requests. The name is latin for "rest"
 
@@ -48,3 +48,41 @@ Reliqua includes a built in rate limiting API. Check the RateLimiterFactory clas
 
 
 More information can be found on the javadocs
+
+## Installing
+Current version: [ ![][badge] ][download]
+
+### With gradle
+
+```groovy
+repositories {
+    maven {
+        name 'duncte123-jfrog'
+        url 'https://duncte123.jfrog.io/artifactory/maven'
+    }
+}
+
+dependencies {
+    implementation group: 'me.duncte123', name: 'reliqua', version: '[VERSION]'
+}
+```
+
+### With maven
+
+```xml
+<repository>
+    <id>jfrog-duncte123</id>
+    <name>jfrog-duncte123</name>
+    <url>https://duncte123.jfrog.io/artifactory/maven</url>
+</repository>
+
+<dependency>
+  <groupId>me.duncte123</groupId>
+  <artifactId>reliqua</artifactId>
+  <version>[VERSION]</version>
+</dependency>
+```
+
+
+[badge]: https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Fduncte123.jfrog.io%2Fartifactory%2Fmaven%2Fme%2Fduncte123%2Freliqua%2Fmaven-metadata.xml
+[download]: https://duncte123.jfrog.io/ui/packages/gav:%2F%2Fme.duncte123:reliqua
