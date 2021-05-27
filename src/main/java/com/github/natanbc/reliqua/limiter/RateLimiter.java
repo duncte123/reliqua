@@ -6,7 +6,7 @@ import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 
-public abstract class RateLimiter {
+public abstract class RateLimiter implements AutoCloseable {
     public static final int RATE_LIMIT_CODE = 429;
 
     /**
@@ -127,5 +127,8 @@ public abstract class RateLimiter {
         public long getTimeUntilReset() {
             return 0;
         }
+
+        @Override
+        public void close() {}
     }
 }

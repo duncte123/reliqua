@@ -83,6 +83,13 @@ public class DefaultRateLimiter extends RateLimiter {
     }
 
     @Override
+    public void close() {
+        if (this.pendingRequests.isEmpty()) {
+            this.executor.shutdown();
+        }
+    }
+
+    @Override
     public int getRemainingRequests() {
         return this.remainingUses;
     }

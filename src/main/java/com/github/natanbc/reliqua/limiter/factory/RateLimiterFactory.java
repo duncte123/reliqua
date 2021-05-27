@@ -48,6 +48,15 @@ public abstract class RateLimiterFactory {
     protected abstract RateLimiter createRateLimiter(String key);
 
     /**
+     * Shuts down all rate limiters when their queues are empty
+     */
+    public void shutdownAllRateLimiters() throws Exception {
+        for (final RateLimiter rateLimiter : this.rateLimiterMap.values()) {
+            rateLimiter.close();
+        }
+    }
+
+    /**
      * Returns a rate limiter factory whose rate limiters directly handle all requests, with no throttling.
      *
      * @return A direct rate limiter factory.

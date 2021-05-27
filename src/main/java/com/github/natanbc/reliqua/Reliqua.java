@@ -103,8 +103,9 @@ public abstract class Reliqua {
         return this.shutdown;
     }
 
-    public void shutdown() {
+    public void shutdown() throws Exception {
         this.shutdown = true;
+        this.rateLimiterFactory.shutdownAllRateLimiters();
         this.client.connectionPool().evictAll();
         this.client.dispatcher().executorService().shutdown();
     }
